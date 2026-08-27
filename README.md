@@ -1,8 +1,8 @@
 # dark-monitoring
 
 Synthetic availability monitoring for the dARK platform with Prometheus,
-Blackbox Exporter and Grafana. It is a separate deployment unit, but is kept
-next to `dark-deployer` so its target inventory is generated from the same
+Blackbox Exporter and Grafana. It lives at `components/monitoring` inside
+`dark-deployer`, so its target inventory is generated from the same
 `.env`, `.env.integration` and `storage-topology.json` that configure dARK.
 
 It probes the externally reachable API of each service; it does **not** scrape
@@ -31,19 +31,21 @@ pass alternate files to the generator.
 ## Start locally
 
 ```bash
-cd dark-monitoring
-cp .env.example .env
-# Set a strong, unique GRAFANA_ADMIN_PASSWORD in .env.
-python3 scripts/generate_targets.py
-docker compose up -d
+cd components/monitoring
+python3 install.py
 ```
+
+On its first run, the installer creates `.env` with restrictive permissions
+and stops. Set a strong, unique `GRAFANA_ADMIN_PASSWORD`, then run it again.
+It generates the targets, validates Compose, starts the stack and checks
+Prometheus and Grafana readiness.
 
 Grafana is then available only on `http://127.0.0.1:3000`; Prometheus is only
 on `http://127.0.0.1:9090`. The provisioned **dARK / Availability** dashboard
 shows endpoint availability and latency. `generated/` is excluded from Git.
 
-Run the generator after changing `.env`, `.env.integration`, topology or the
-dashboard URL, then reload Prometheus without a container restart:
+Run the generator after changing the deployer `.env`, `.env.integration`,
+topology or dashboard URL, then reload Prometheus without a container restart:
 
 ```bash
 python3 scripts/generate_targets.py
@@ -99,10 +101,25 @@ sudo python3 scripts/configure_docker_dns.py
 sudo python3 scripts/configure_docker_dns.py --apply
 sudo systemctl restart docker
 
-docker compose pull
-docker compose up -d
+python3 install.py
 ```
 
 Use this only when `daemon.json` has a static `dns` field that is known to be
 unreachable. If the host itself cannot resolve Docker Hub, correct the host or
 network DNS instead.
+
+## Operations
+
+```bash
+# Stop Blackbox, Prometheus and Grafana; retain containers and data volumes.
+python3 stop.py
+
+# Remove containers, network, volumes, images and generated targets.
+python3 clean.py
+
+# Optional: perform cleanup but keep downloaded images for a faster reinstall.
+python3 clean.py --keep-images
+```
+
+`clean.py` preserves the repository source and `.env`. Its destructive action
+requires interactive confirmation unless `--yes` is supplied for automation.

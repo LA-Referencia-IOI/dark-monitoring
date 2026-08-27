@@ -12,7 +12,8 @@ from pathlib import Path
 from urllib.parse import urlparse, urlunparse
 
 
-ROOT = Path(__file__).resolve().parents[2]
+MONITORING_ROOT = Path(__file__).resolve().parents[1]
+DEPLOYER_ROOT = MONITORING_ROOT.parents[1]
 
 
 def read_env(path: Path) -> dict[str, str]:
@@ -82,11 +83,11 @@ def app_urls(env: dict[str, str], dashboard_env: dict[str, str]) -> dict[str, st
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--env", type=Path, default=ROOT / ".env")
-    parser.add_argument("--integration-env", type=Path, default=ROOT / ".env.integration")
-    parser.add_argument("--topology", type=Path, default=ROOT / "storage-topology.json")
-    parser.add_argument("--dashboard-env", type=Path, default=ROOT / "components/frontend/dashboard-web/.env")
-    parser.add_argument("--output-dir", type=Path, default=ROOT / "dark-monitoring/generated")
+    parser.add_argument("--env", type=Path, default=DEPLOYER_ROOT / ".env")
+    parser.add_argument("--integration-env", type=Path, default=DEPLOYER_ROOT / ".env.integration")
+    parser.add_argument("--topology", type=Path, default=DEPLOYER_ROOT / "storage-topology.json")
+    parser.add_argument("--dashboard-env", type=Path, default=DEPLOYER_ROOT / "components/frontend/dashboard-web/.env")
+    parser.add_argument("--output-dir", type=Path, default=MONITORING_ROOT / "generated")
     args = parser.parse_args()
 
     env = read_env(args.env)
