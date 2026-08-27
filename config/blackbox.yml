@@ -1,0 +1,25 @@
+modules:
+  http_2xx:
+    prober: http
+    timeout: 8s
+    http:
+      method: GET
+      preferred_ip_protocol: ip4
+      valid_status_codes: [200, 204]
+  json_rpc:
+    prober: http
+    timeout: 8s
+    http:
+      method: POST
+      headers:
+        Content-Type: application/json
+      body: '{"jsonrpc":"2.0","method":"eth_chainId","params":[],"id":1}'
+      preferred_ip_protocol: ip4
+      valid_status_codes: [200]
+  ipfs_api:
+    prober: http
+    timeout: 8s
+    http:
+      method: POST
+      preferred_ip_protocol: ip4
+      valid_status_codes: [200]

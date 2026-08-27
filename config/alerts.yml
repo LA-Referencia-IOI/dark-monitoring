@@ -1,0 +1,27 @@
+groups:
+  - name: dark-availability
+    rules:
+      - alert: DarkEndpointDown
+        expr: probe_success{job=~"blackbox-http|blackbox-json-rpc|blackbox-ipfs-api"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "dARK endpoint unavailable: {{ $labels.service }}"
+          description: "{{ $labels.instance }} (site={{ $labels.site }}) has failed synthetic probes for two minutes."
+      - alert: DarkEndpointSlow
+        expr: probe_duration_seconds{job="blackbox-http"} > 3
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "dARK endpoint slow: {{ $labels.service }}"
+          description: "{{ $labels.instance }} took more than 3 seconds for five minutes."
+      - alert: DarkStoreWriteUnavailable
+        expr: probe_success{service="store-api-write"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Store API cannot accept writes"
+          description: "The Store API /health/write readiness endpoint is unavailable."
