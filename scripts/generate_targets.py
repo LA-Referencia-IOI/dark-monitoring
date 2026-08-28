@@ -8,12 +8,15 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 from pathlib import Path
 from urllib.parse import urlparse, urlunparse
 
 
 MONITORING_ROOT = Path(__file__).resolve().parents[1]
 DEPLOYER_ROOT = MONITORING_ROOT.parents[1]
+TARGET_NAME = re.compile(r"[a-z0-9][a-z0-9_-]*$")
+LABEL_NAME = re.compile(r"[a-zA-Z_][a-zA-Z0-9_]*$")
 
 
 def read_env(path: Path) -> dict[str, str]:
@@ -44,6 +47,81 @@ def add(targets: list[dict], url: str, service: str, site: str = "default", node
     if node:
         labels["node"] = node
     targets.append({"targets": [host_visible_to_container(url)], "labels": labels})
+
+
+def configured_http_targets(value: object, source: str) -> list[dict]:
+    """Validate the deployer contract or an inline list and convert it to file-SD."""
+    if isinstance(value, dict):
+        if value.get("version") != 1 or not isinstance(value.get("targets"), list):
+            raise ValueError(f"{source} must use monitoring target schema version 1")
+        value = value["targets"]
+    if not isinstance(value, list):
+        raise ValueError(f"{source} must be a JSON array or monitoring target contract")
+
+    result: list[dict] = []
+    names: set[str] = set()
+    for index, target in enumerate(value):
+        if not isinstance(target, dict):
+            raise ValueError(f"{source}[{index}] must be an object")
+        unknown = set(target) - {"name", "url", "labels"}
+        if unknown:
+            raise ValueError(f"{source}[{index}] has unsupported fields: {', '.join(sorted(unknown))}")
+        name = target.get("name")
+        url = target.get("url")
+        labels = target.get("labels", {})
+        if not isinstance(name, str) or not TARGET_NAME.fullmatch(name):
+            raise ValueError(f"{source}[{index}].name is invalid")
+        if name in names:
+            raise ValueError(f"{source} contains duplicate target name {name!r}")
+        names.add(name)
+        if not isinstance(url, str):
+            raise ValueError(f"{source}[{index}].url must be an HTTP(S) URL")
+        parsed = urlparse(url)
+        if parsed.scheme not in {"http", "https"} or not parsed.hostname:
+            raise ValueError(f"{source}[{index}].url must be an HTTP(S) URL")
+        if parsed.username or parsed.password:
+            raise ValueError(f"{source}[{index}].url must not contain credentials")
+        if not isinstance(labels, dict):
+            raise ValueError(f"{source}[{index}].labels must be an object")
+        normalized_labels = {"service": name}
+        for key, label_value in labels.items():
+            if not isinstance(key, str) or not LABEL_NAME.fullmatch(key):
+                raise ValueError(f"{source}[{index}].labels contains an invalid name")
+            if not isinstance(label_value, str) or not label_value:
+                raise ValueError(f"{source}[{index}].labels.{key} must be a non-empty string")
+            normalized_labels[key] = label_value
+        result.append({
+            "targets": [host_visible_to_container(url)],
+            "labels": normalized_labels,
+        })
+    return result
+
+
+def monitoring_http_targets(env: dict[str, str], env_path: Path) -> list[dict] | None:
+    """Return an authoritative configured target list, or None for discovery."""
+    contract_path = env.get("DARK_MONITOR_TARGETS_FILE", "").strip()
+    inline = env.get("DARK_MONITOR_TARGETS_JSON", "").strip()
+    if contract_path and inline and inline != "[]":
+        raise ValueError("set only DARK_MONITOR_TARGETS_FILE or DARK_MONITOR_TARGETS_JSON")
+    if contract_path:
+        path = Path(contract_path)
+        if not path.is_absolute():
+            path = env_path.parent / path
+        try:
+            value = json.loads(path.read_text(encoding="utf-8"))
+        except FileNotFoundError as exc:
+            raise ValueError(f"monitoring target file not found: {path}") from exc
+        except json.JSONDecodeError as exc:
+            raise ValueError(f"monitoring target file is not valid JSON: {path}") from exc
+        return configured_http_targets(value, str(path))
+    if inline:
+        try:
+            value = json.loads(inline)
+        except json.JSONDecodeError as exc:
+            raise ValueError("DARK_MONITOR_TARGETS_JSON is not valid JSON") from exc
+        if value:
+            return configured_http_targets(value, "DARK_MONITOR_TARGETS_JSON")
+    return None
 
 
 def topology_endpoint(peer: dict, network_key: str, local_key: str) -> str:
@@ -84,6 +162,7 @@ def app_urls(env: dict[str, str], dashboard_env: dict[str, str]) -> dict[str, st
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--env", type=Path, default=DEPLOYER_ROOT / ".env")
+    parser.add_argument("--monitoring-env", type=Path, default=MONITORING_ROOT / ".env")
     parser.add_argument("--integration-env", type=Path, default=DEPLOYER_ROOT / ".env.integration")
     parser.add_argument("--topology", type=Path, default=DEPLOYER_ROOT / "storage-topology.json")
     parser.add_argument("--dashboard-env", type=Path, default=DEPLOYER_ROOT / "components/frontend/dashboard-web/.env")
@@ -91,19 +170,24 @@ def main() -> None:
     args = parser.parse_args()
 
     env = read_env(args.env)
+    monitoring_env = read_env(args.monitoring_env)
     integration = read_env(args.integration_env)
     dashboard = read_env(args.dashboard_env)
     http_targets: list[dict] = []
     ipfs_targets: list[dict] = []
     rpc_targets: list[dict] = []
-    urls = app_urls(env, dashboard)
-    add(http_targets, urls["admin"] + "/health", "admin-api")
-    add(http_targets, urls["minter"] + "/health", "minter-api")
-    add(http_targets, urls["resolver"] + "/health", "resolver-api")
-    add(http_targets, urls["store_api"] + "/health/live", "store-api-live")
-    add(http_targets, urls["store_api"] + "/health/read", "store-api-read")
-    add(http_targets, urls["store_api"] + "/health/write", "store-api-write")
-    add(http_targets, urls["dashboard"], "dashboard")
+    configured_targets = monitoring_http_targets(monitoring_env, args.monitoring_env)
+    if configured_targets is not None:
+        http_targets.extend(configured_targets)
+    else:
+        urls = app_urls(env, dashboard)
+        add(http_targets, urls["admin"] + "/health", "admin-api")
+        add(http_targets, urls["minter"] + "/health", "minter-api")
+        add(http_targets, urls["resolver"] + "/health", "resolver-api")
+        add(http_targets, urls["store_api"] + "/health/live", "store-api-live")
+        add(http_targets, urls["store_api"] + "/health/read", "store-api-read")
+        add(http_targets, urls["store_api"] + "/health/write", "store-api-write")
+        add(http_targets, urls["dashboard"], "dashboard")
     add(rpc_targets, integration.get("DARK_RPC_URL") or env.get("RPC_URL"), "blockchain-rpc")
 
     if args.topology.exists():
@@ -116,7 +200,8 @@ def main() -> None:
                 cluster = topology_endpoint(peer, "cluster_api_url", "host_cluster_api_url")
                 # Kubo's version endpoint is POST-only, while Cluster's /id is
                 # safe to probe with GET.
-                add(http_targets, cluster + "/id" if cluster else "", "ipfs-cluster", site_id, peer_id)
+                if configured_targets is None:
+                    add(http_targets, cluster + "/id" if cluster else "", "ipfs-cluster", site_id, peer_id)
                 if ipfs:
                     add(ipfs_targets, ipfs + "/api/v0/version", "ipfs-kubo", site_id, peer_id)
 

@@ -56,6 +56,47 @@ class TargetGenerationTests(unittest.TestCase):
             "http://10.20.30.31:5001",
         )
 
+    def test_inline_monitoring_targets_are_authoritative(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            env_path = root / ".env"
+            env_path.write_text(
+                'DARK_MONITOR_TARGETS_JSON=[{"name":"remote-admin",'
+                '"url":"https://admin.example/health",'
+                '"labels":{"site":"site-a"}}]\n'
+            )
+            targets = generator.monitoring_http_targets(
+                generator.read_env(env_path), env_path
+            )
+            self.assertEqual(targets, [{
+                "targets": ["https://admin.example/health"],
+                "labels": {"service": "remote-admin", "site": "site-a"},
+            }])
+
+    def test_reads_deployer_monitoring_contract(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            contract = root / "targets.json"
+            contract.write_text(json.dumps({
+                "version": 1,
+                "deployment_id": "dark-site-a-1",
+                "targets": [{
+                    "name": "store-write",
+                    "url": "http://10.20.30.20:8003/health/write",
+                    "labels": {"component": "store-api", "site": "site-a"},
+                }],
+            }))
+            env_path = root / ".env"
+            env_path.write_text("DARK_MONITOR_TARGETS_FILE=targets.json\n")
+            targets = generator.monitoring_http_targets(
+                generator.read_env(env_path), env_path
+            )
+            self.assertEqual(targets[0]["targets"], [
+                "http://10.20.30.20:8003/health/write"
+            ])
+            self.assertEqual(targets[0]["labels"]["service"], "store-write")
+            self.assertEqual(targets[0]["labels"]["component"], "store-api")
+
 
 class DockerDnsTests(unittest.TestCase):
     def test_dry_run_preserves_static_dns(self):
