@@ -71,10 +71,16 @@ Grafana is then available only on `http://127.0.0.1:3000`; Prometheus is only
 on `http://127.0.0.1:9090`. The provisioned **dARK / Availability** dashboard
 shows endpoint availability and latency. `generated/` is excluded from Git.
 
-To expose a navigation entry for administrators in `dashboard-web`, set its
-`GRAFANA_URL` to the operator-facing Grafana URL. The Dashboard only opens the
-link in a new tab; Grafana remains responsible for authentication and
-authorization, and no Grafana credential is placed in Dashboard HTML.
+Anonymous Grafana access is enabled with the read-only `Viewer` role so the
+dARK Dashboard can open `/dashboards` without handling or exposing Grafana
+credentials. Administrative actions still require the configured administrator
+account. Set `GRAFANA_ANONYMOUS_ENABLED=false` when Grafana is published through
+another authentication layer or when anonymous viewing is not acceptable.
+
+To expose navigation entries for administrators in `dashboard-web`, set
+`GRAFANA_URL` to the operator-facing Grafana `/dashboards` URL and
+`PROMETHEUS_URL` to its `/targets` URL. The Dashboard only opens the links in a
+new tab, and no monitoring credential is placed in Dashboard HTML.
 
 Run the generator after changing the deployer `.env`, `.env.integration`,
 topology or dashboard URL, then reload Prometheus without a container restart:
