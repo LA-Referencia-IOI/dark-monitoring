@@ -22,6 +22,7 @@ DEFAULT_PORTS = {
     "resolver-api": 8002,
     "store-api": 8003,
     "dashboard": 8080,
+    "explorer": 80,
     "ipfs-kubo": 5001,
     "ipfs-cluster": 9094,
 }
@@ -105,6 +106,24 @@ def generate(snapshot: dict) -> tuple[dict[str, list[dict]], dict]:
             paths = [("/health/live", "live"), ("/health/read", "read"), ("/health/write", "write")]
         elif service_type == "dashboard":
             paths = [("/", "http")]
+        elif service_type == "explorer":
+            result["http"].append(_target(
+                base.rstrip("/") + "/health",
+                deployment,
+                service_id,
+                service,
+                machine,
+                "health",
+            ))
+            result["rpc"].append(_target(
+                base.rstrip("/") + "/jsonrpc",
+                deployment,
+                service_id,
+                service,
+                machine,
+                "json-rpc",
+            ))
+            continue
         elif service_type == "ipfs-kubo":
             bucket, paths = "ipfs", [("/api/v0/version", "version")]
         elif service_type == "ipfs-cluster":

@@ -22,6 +22,7 @@ service, an unreachable VPN path or a failed Store API readiness dependency.
 | Resolver API | `GET /health` |
 | Store API | `GET /health/live`, `/health/read`, `/health/write` |
 | Dashboard | `GET /` |
+| Block Explorer | `GET /health`, JSON-RPC `eth_chainId` through `/jsonrpc` |
 | Blockchain | JSON-RPC `eth_chainId` request |
 | Each Kubo peer | `POST /api/v0/version` |
 | Each Cluster peer | `GET /id` |
