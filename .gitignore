@@ -1,3 +1,4 @@
 .env
 generated/*.json
+generated/*.prom
 __pycache__/

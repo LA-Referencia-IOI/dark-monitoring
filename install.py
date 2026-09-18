@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import shutil
 import subprocess
 import sys
@@ -68,15 +69,47 @@ def wait_for(url: str, name: str, timeout: int = 60) -> None:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--no-start", action="store_true", help="Generate and validate configuration only")
+    parser.add_argument(
+        "--deployment-snapshot",
+        type=Path,
+        help="applied deployment-topology.json; preferred over legacy .env discovery",
+    )
     args = parser.parse_args()
     try:
         env = ensure_env(PROJECT_ROOT / ".env")
-        run([sys.executable, "scripts/generate_targets.py"])
-        run(["docker", "compose", "config", "-q"])
+        compose = ["docker", "compose", "-f", "docker-compose.yml"]
+        if args.deployment_snapshot:
+            run([
+                sys.executable,
+                "scripts/generate_v3_targets.py",
+                "--snapshot",
+                str(args.deployment_snapshot.resolve()),
+                "--output-dir",
+                str(PROJECT_ROOT / "generated"),
+            ])
+            snapshot = json.loads(args.deployment_snapshot.read_text(encoding="utf-8"))
+            deployment_id = snapshot.get("deployment", {}).get("id")
+            if not deployment_id:
+                raise RuntimeError("deployment snapshot has no deployment.id")
+            deployer = PROJECT_ROOT.parents[1] / "deploy.py"
+            if deployer.is_file():
+                run([
+                    sys.executable,
+                    str(deployer),
+                    "metrics-export",
+                    "--deployment",
+                    str(deployment_id),
+                    "--output",
+                    str(PROJECT_ROOT / "generated" / "dark.prom"),
+                ])
+            compose.extend(["-f", "generated/compose.networks.json"])
+        else:
+            run([sys.executable, "scripts/generate_targets.py"])
+        run([*compose, "config", "-q"])
         if args.no_start:
             print("[OK] Monitoring configuration is valid.")
             return 0
-        run(["docker", "compose", "up", "-d"])
+        run([*compose, "up", "-d"])
         prometheus_port = env.get("PROMETHEUS_PORT", "9090")
         grafana_port = env.get("GRAFANA_PORT", "3000")
         wait_for(f"http://127.0.0.1:{prometheus_port}/-/ready", "Prometheus")
