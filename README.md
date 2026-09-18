@@ -1,9 +1,13 @@
 # dark-monitoring
 
-Synthetic availability monitoring for the dARK platform with Prometheus,
-Blackbox Exporter and Grafana. It lives at `components/monitoring` inside
-`dark-deployer`, so its target inventory is generated from the same
-`.env`, `.env.integration` and `storage-topology.json` that configure dARK.
+Operational monitoring for the dARK platform with Prometheus, Blackbox
+Exporter, node-exporter, cAdvisor and Grafana. It lives at
+`components/dark-monitoring` inside `dark-deployer`.
+
+For deployment v3, the authoritative input is the **applied deployment
+snapshot**, not a second host list and not an inventory that may not have been
+applied. Legacy `.env`, `.env.integration` and `storage-topology.json`
+discovery remains available only for older installations.
 
 It probes the externally reachable API of each service; it does **not** scrape
 application internals. This is the right first signal for an unavailable
@@ -50,18 +54,27 @@ methods.
 ## Start locally
 
 ```bash
-cd components/monitoring
-python3 install.py
+cd components/dark-monitoring
+python3 install.py \
+  --deployment-snapshot ../../.generated/deployment-v3/dark-operator-local-ha/bundle/shared/deployment-topology.json
 ```
 
 On its first run, the installer creates `.env` with restrictive permissions
 and stops. Set a strong, unique `GRAFANA_ADMIN_PASSWORD`, then run it again.
-It generates the targets, validates Compose, starts the stack and checks
-Prometheus and Grafana readiness.
+It generates the targets and Docker-network attachment from the applied
+topology, validates Compose, starts the stack and checks Prometheus and Grafana
+readiness. Local services are probed through Docker DNS on their managed
+network. Remote services are included only when the snapshot declares an
+exposure or listener reachable from the monitoring host.
 
 Grafana is then available only on `http://127.0.0.1:3000`; Prometheus is only
 on `http://127.0.0.1:9090`. The provisioned **dARK / Availability** dashboard
 shows endpoint availability and latency. `generated/` is excluded from Git.
+
+To expose a navigation entry for administrators in `dashboard-web`, set its
+`GRAFANA_URL` to the operator-facing Grafana URL. The Dashboard only opens the
+link in a new tab; Grafana remains responsible for authentication and
+authorization, and no Grafana credential is placed in Dashboard HTML.
 
 Run the generator after changing the deployer `.env`, `.env.integration`,
 topology or dashboard URL, then reload Prometheus without a container restart:
@@ -95,10 +108,29 @@ visible in Prometheus/Grafana. To notify people, add Alertmanager plus the
 chosen receiver (email, Slack, PagerDuty, etc.); no notification channel is
 configured here because that would require operational credentials.
 
-For CPU, memory, disk, container restarts, IPFS pin counts and application
-business metrics, add node/cAdvisor exporters and native `/metrics` endpoints
-to the corresponding projects. Those metrics are complementary to—not a
-replacement for—the external probes in this project.
+node-exporter supplies host filesystem and inode data that Docker metrics do
+not provide. cAdvisor supplies container resource series and preserves Compose
+labels, including `org.dark.deployment.id` and `org.dark.service.id`, so Grafana
+can use the same stable service identity as `deploy.py metrics`. Application
+business metrics, IPFS pin counts and consensus-specific metrics still require
+native `/metrics` endpoints in the corresponding projects.
+
+The interactive `deploy.py metrics` collector remains the preferred ad-hoc
+local/SSH diagnostic tool. Its parser is also reused by `deploy.py
+metrics-export`, which atomically writes `generated/dark.prom` for
+node-exporter's textfile collector. Prometheus does not run an SSH probe during
+a scrape; schedule collection independently, for example once per minute:
+
+```bash
+cd /path/to/dark-deployer
+.venv314/bin/python deploy.py metrics-export \
+  --deployment dark-operator-local-ha \
+  --output components/dark-monitoring/generated/dark.prom
+```
+
+Use a systemd timer or equivalent scheduler in production, prevent overlapping
+runs, and alert on `time() - dark_metrics_export_timestamp_seconds`. Direct
+exporters provide continuous samples while Blackbox validates reachability.
 
 ## Docker DNS portability
 

@@ -25,3 +25,47 @@ groups:
         annotations:
           summary: "Store API cannot accept writes"
           description: "The Store API /health/write readiness endpoint is unavailable."
+      - alert: DarkMonitoringExporterDown
+        expr: up{job=~"node-exporter|cadvisor"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Monitoring exporter unavailable: {{ $labels.job }}"
+          description: "Prometheus has been unable to scrape {{ $labels.instance }} for two minutes."
+      - alert: DarkDeploymentMetricsStale
+        expr: time() - dark_metrics_export_timestamp_seconds > 180
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "dARK deployment metrics are stale"
+          description: "The scheduled Docker/SSH collection for {{ $labels.deployment }} has not completed recently."
+      - alert: DarkDeploymentMetricsMissing
+        expr: absent(dark_metrics_export_timestamp_seconds)
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "dARK deployment metrics are missing"
+          description: "node-exporter has not published a dARK collector textfile for five minutes."
+      - alert: DarkHostFilesystemNearlyFull
+        expr: |
+          100 * (1 - node_filesystem_avail_bytes{fstype!~"tmpfs|overlay|squashfs"}
+          / node_filesystem_size_bytes{fstype!~"tmpfs|overlay|squashfs"}) > 85
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Host filesystem is nearly full"
+          description: "{{ $labels.mountpoint }} on {{ $labels.instance }} has exceeded 85% usage for ten minutes."
+      - alert: DarkHostInodesNearlyExhausted
+        expr: |
+          100 * (1 - node_filesystem_files_free{fstype!~"tmpfs|overlay|squashfs"}
+          / node_filesystem_files{fstype!~"tmpfs|overlay|squashfs"}) > 85
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Host filesystem inodes are nearly exhausted"
+          description: "{{ $labels.mountpoint }} on {{ $labels.instance }} has exceeded 85% inode usage."
