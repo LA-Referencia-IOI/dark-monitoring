@@ -105,7 +105,10 @@ def generate(snapshot: dict) -> tuple[dict[str, list[dict]], dict]:
         elif service_type == "store-api":
             paths = [("/health/live", "live"), ("/health/read", "read"), ("/health/write", "write")]
         elif service_type == "dashboard":
-            paths = [("/", "http")]
+            # The dashboard container redirects / to /admin/login, a route that
+            # exists only at the public gateway prefix. Probe its local login
+            # route directly when monitoring through Docker DNS.
+            paths = [("/login", "login")]
         elif service_type == "explorer":
             result["http"].append(_target(
                 base.rstrip("/") + "/health",

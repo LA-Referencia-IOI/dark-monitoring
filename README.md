@@ -21,7 +21,7 @@ service, an unreachable VPN path or a failed Store API readiness dependency.
 | Minter API | `GET /health` |
 | Resolver API | `GET /health` |
 | Store API | `GET /health/live`, `/health/read`, `/health/write` |
-| Dashboard | `GET /` |
+| Dashboard | `GET /login` (internal container route) |
 | Block Explorer | `GET /health`, JSON-RPC `eth_chainId` through `/jsonrpc` |
 | Blockchain | JSON-RPC `eth_chainId` request |
 | Each Kubo peer | `POST /api/v0/version` |
@@ -132,12 +132,17 @@ a scrape; schedule collection independently, for example once per minute:
 cd /path/to/dark-deployer
 .venv314/bin/python deploy.py metrics-export \
   --deployment dark-operator-local-ha \
+  --include-disk \
   --output components/dark-monitoring/generated/dark.prom
 ```
 
 Use a systemd timer or equivalent scheduler in production, prevent overlapping
 runs, and alert on `time() - dark_metrics_export_timestamp_seconds`. Direct
 exporters provide continuous samples while Blackbox validates reachability.
+`dark_docker_disk_size_bytes`, `dark_docker_disk_reclaimable_bytes` and
+`dark_docker_disk_objects` describe Docker objects reported by `docker system
+df`; they are not filesystem, `/srv/dark/data`, root-volume or EBS capacity
+metrics. Those remain node-exporter filesystem metrics.
 
 ## Docker DNS portability
 

@@ -60,6 +60,33 @@
       "title": "Managed container state",
       "gridPos": {"x": 0, "y": 14, "w": 24, "h": 10},
       "targets": [{"expr": "dark_container_running", "instant": true, "format": "table", "refId": "A"}]
+    },
+    {
+      "id": 8,
+      "type": "timeseries",
+      "title": "Docker disk footprint",
+      "description": "Docker object storage reported by docker system df; this is not filesystem or EBS capacity.",
+      "gridPos": {"x": 0, "y": 24, "w": 8, "h": 8},
+      "targets": [{"expr": "sum by (machine, type) (dark_docker_disk_size_bytes)", "legendFormat": "{{machine}} {{type}}", "refId": "A"}],
+      "fieldConfig": {"defaults": {"unit": "bytes"}}
+    },
+    {
+      "id": 9,
+      "type": "timeseries",
+      "title": "Docker reclaimable disk footprint",
+      "description": "Reclaimable Docker object storage reported by docker system df; this is not filesystem free space.",
+      "gridPos": {"x": 8, "y": 24, "w": 8, "h": 8},
+      "targets": [{"expr": "sum by (machine, type) (dark_docker_disk_reclaimable_bytes)", "legendFormat": "{{machine}} {{type}}", "refId": "A"}],
+      "fieldConfig": {"defaults": {"unit": "bytes"}}
+    },
+    {
+      "id": 10,
+      "type": "timeseries",
+      "title": "Docker object count",
+      "description": "Number of Docker objects reported by docker system df.",
+      "gridPos": {"x": 16, "y": 24, "w": 8, "h": 8},
+      "targets": [{"expr": "sum by (machine, type) (dark_docker_disk_objects)", "legendFormat": "{{machine}} {{type}}", "refId": "A"}],
+      "fieldConfig": {"defaults": {"decimals": 0}}
     }
   ]
 }
