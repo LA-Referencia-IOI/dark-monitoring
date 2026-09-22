@@ -21,7 +21,8 @@ service, an unreachable VPN path or a failed Store API readiness dependency.
 | Minter API | `GET /health` |
 | Resolver API | `GET /health` |
 | Store API | `GET /health/live`, `/health/read`, `/health/write` |
-| Dashboard | `GET /` |
+| Dashboard | `GET /login` (internal container route) |
+| Block Explorer | `GET /health`, JSON-RPC `eth_chainId` through `/jsonrpc` |
 | Blockchain | JSON-RPC `eth_chainId` request |
 | Each Kubo peer | `POST /api/v0/version` |
 | Each Cluster peer | `GET /id` |
@@ -71,10 +72,16 @@ Grafana is then available only on `http://127.0.0.1:3000`; Prometheus is only
 on `http://127.0.0.1:9090`. The provisioned **dARK / Availability** dashboard
 shows endpoint availability and latency. `generated/` is excluded from Git.
 
-To expose a navigation entry for administrators in `dashboard-web`, set its
-`GRAFANA_URL` to the operator-facing Grafana URL. The Dashboard only opens the
-link in a new tab; Grafana remains responsible for authentication and
-authorization, and no Grafana credential is placed in Dashboard HTML.
+Anonymous Grafana access is enabled with the read-only `Viewer` role so the
+dARK Dashboard can open `/dashboards` without handling or exposing Grafana
+credentials. Administrative actions still require the configured administrator
+account. Set `GRAFANA_ANONYMOUS_ENABLED=false` when Grafana is published through
+another authentication layer or when anonymous viewing is not acceptable.
+
+To expose navigation entries for administrators in `dashboard-web`, set
+`GRAFANA_URL` to the operator-facing Grafana `/dashboards` URL and
+`PROMETHEUS_URL` to its `/targets` URL. The Dashboard only opens the links in a
+new tab, and no monitoring credential is placed in Dashboard HTML.
 
 Run the generator after changing the deployer `.env`, `.env.integration`,
 topology or dashboard URL, then reload Prometheus without a container restart:
@@ -125,12 +132,17 @@ a scrape; schedule collection independently, for example once per minute:
 cd /path/to/dark-deployer
 .venv314/bin/python deploy.py metrics-export \
   --deployment dark-operator-local-ha \
+  --include-disk \
   --output components/dark-monitoring/generated/dark.prom
 ```
 
 Use a systemd timer or equivalent scheduler in production, prevent overlapping
 runs, and alert on `time() - dark_metrics_export_timestamp_seconds`. Direct
 exporters provide continuous samples while Blackbox validates reachability.
+`dark_docker_disk_size_bytes`, `dark_docker_disk_reclaimable_bytes` and
+`dark_docker_disk_objects` describe Docker objects reported by `docker system
+df`; they are not filesystem, `/srv/dark/data`, root-volume or EBS capacity
+metrics. Those remain node-exporter filesystem metrics.
 
 ## Docker DNS portability
 

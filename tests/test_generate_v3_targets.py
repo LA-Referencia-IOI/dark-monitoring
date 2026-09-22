@@ -26,7 +26,9 @@ def snapshot() -> dict:
         },
         "services": {
             "admin-api": {"type": "admin-api", "machine": "apps", "configuration": {}},
+            "dashboard": {"type": "dashboard", "machine": "apps", "configuration": {}},
             "store-api": {"type": "store-api", "machine": "apps", "configuration": {}},
+            "explorer": {"type": "explorer", "machine": "apps", "configuration": {}},
             "rpc01": {"type": "besu-rpc", "machine": "apps", "configuration": {}},
             "remote-kubo": {
                 "type": "ipfs-kubo",
@@ -59,6 +61,23 @@ class V3TargetGenerationTests(unittest.TestCase):
         targets, _ = generator.generate(snapshot())
         store = [item for item in targets["http"] if item["labels"]["service"] == "store-api"]
         self.assertEqual({item["labels"]["probe"] for item in store}, {"live", "read", "write"})
+
+    def test_dashboard_uses_its_internal_login_route(self):
+        targets, _ = generator.generate(snapshot())
+        dashboard = next(item for item in targets["http"] if item["labels"]["service"] == "dashboard")
+        self.assertEqual(dashboard["targets"], ["http://dashboard:8080/login"])
+        self.assertEqual(dashboard["labels"]["probe"], "login")
+
+    def test_explorer_health_and_rpc_proxy_are_monitored(self):
+        targets, _ = generator.generate(snapshot())
+        explorer_http = next(
+            item for item in targets["http"] if item["labels"]["service"] == "explorer"
+        )
+        explorer_rpc = next(
+            item for item in targets["rpc"] if item["labels"]["service"] == "explorer"
+        )
+        self.assertEqual(explorer_http["targets"], ["http://explorer:80/health"])
+        self.assertEqual(explorer_rpc["targets"], ["http://explorer:80/jsonrpc"])
 
     def test_remote_service_uses_declared_private_exposure(self):
         targets, _ = generator.generate(snapshot())

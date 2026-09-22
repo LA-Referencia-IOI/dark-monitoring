@@ -99,6 +99,7 @@ def main() -> int:
                     "metrics-export",
                     "--deployment",
                     str(deployment_id),
+                    "--include-disk",
                     "--output",
                     str(PROJECT_ROOT / "generated" / "dark.prom"),
                 ])
