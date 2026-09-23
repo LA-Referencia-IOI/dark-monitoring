@@ -70,7 +70,9 @@ exposure or listener reachable from the monitoring host.
 
 Grafana is then available only on `http://127.0.0.1:3000`; Prometheus is only
 on `http://127.0.0.1:9090`. The provisioned **dARK / Availability** dashboard
-shows endpoint availability and latency. `generated/` is excluded from Git.
+shows endpoint availability and latency. This component's `.gitignore` excludes
+only `generated/*.json` and `generated/*.prom` from Git; any other file written
+under `generated/` is tracked.
 
 Anonymous Grafana access is enabled with the read-only `Viewer` role so the
 dARK Dashboard can open `/dashboards` without handling or exposing Grafana
