@@ -1,5 +1,8 @@
 # dark-monitoring
 
+New platform developer: follow [developer onboarding](https://github.com/LA-Referencia-IOI/dark-deployer/blob/main/docs/developer-onboarding.md)
+for the complete local stack, signed requests and component iteration.
+
 Operational monitoring for the dARK platform with Prometheus, Blackbox
 Exporter, node-exporter, cAdvisor and Grafana. It lives at
 `components/dark-monitoring` inside `dark-deployer`.
@@ -199,3 +202,40 @@ python3 clean.py --keep-images
 
 `clean.py` preserves the repository source and `.env`. Its destructive action
 requires interactive confirmation unless `--yes` is supplied for automation.
+
+## Current operator-v3 local example
+
+For the platform onboarding lab, run monitoring as a separate Compose project
+and attach Blackbox to the application's Docker network. Start with explicit
+targets instead of passing the operator inventory as a legacy snapshot.
+
+Run `python3 install.py` once to create `.env`. Set its generated Grafana password
+and the following variable in that file, then run the installer again:
+
+```dotenv
+DARK_MONITOR_TARGETS_JSON=[{"name":"minter","url":"http://minter-api:8001/health","labels":{"site":"local"}}]
+```
+
+After the installer starts the project, attach its prober to the local lab's
+network. Use the network name discovered in the onboarding guide (for the
+unmodified single-machine inventory, `dark-operator-local-local`):
+
+```bash
+# Run from this component's root; replace the network for a different inventory.
+DARK_DEV_NETWORK=dark-operator-local-local
+DARK_DEV_BLACKBOX=$(docker compose ps -q blackbox-exporter)
+docker network connect "$DARK_DEV_NETWORK" "$DARK_DEV_BLACKBOX"
+```
+
+Check the target in Prometheus at `http://127.0.0.1:9090/targets` and the
+Availability dashboard in Grafana at `http://127.0.0.1:3000`. The target cannot
+resolve/reach Minter until the network attachment exists. Repeat the attachment
+when Blackbox is recreated. After editing targets, regenerate them with
+`python3 scripts/generate_targets.py` and reload Prometheus as above.
+
+Add other API/Store HTTP targets explicitly as needed. This list replaces HTTP
+auto-discovery and does not imply that RPC, Kubo or consensus are monitored.
+Dashboard navigation links also need explicit URL configuration; they do not
+install monitoring. Host-local gateway targets are a different path: a listener
+bound only to loopback may not be reachable through `host.docker.internal` on
+Linux, so prefer the shared-network route for this local lab.
